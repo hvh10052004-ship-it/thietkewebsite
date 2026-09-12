@@ -3820,7 +3820,7 @@ body.page-tai-ung-dung {
         <a class="dl-download" id="dlApk" href="WebStudio.apk" download="WebStudio.apk">Tải tệp cài đặt</a>
         <p class="dl-hint" id="dlHint">
           Trên điện thoại Android: mở tệp WebStudio.apk, cho phép cài đặt từ nguồn này, rồi bấm Cài đặt.
-          Không mở website bằng file trên máy tính (file://). Hãy chạy npm run dev:lan rồi vào http://IP-máy-tính:3000/tai-ung-dung trên điện thoại.
+          Trên GitHub Pages, file WebStudio.apk phải nằm cùng thư mục với index.html.
         </p>
         <p class="dl-retry">
           Nếu quá trình tải xuống không bắt đầu, vui lòng
@@ -4343,12 +4343,32 @@ function showPage() {
   });
 }
 
+function resolveApkUrl() {
+  if (location.port === "3000") return "/api/download/apk";
+  let path = location.pathname || "/";
+  const last = path.split("/").pop() || "";
+  if (!path.endsWith("/") && !/\.[a-z0-9]+$/i.test(last)) path += "/";
+  if (!path.endsWith("/")) path = path.replace(/[^/]+$/, "");
+  return path + "WebStudio.apk";
+}
+
+function triggerApkDownload(url) {
+  const a = document.createElement("a");
+  a.href = url;
+  a.setAttribute("download", "WebStudio.apk");
+  a.rel = "noopener";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+}
+
 function initDownloadPage() {
   const bar = document.getElementById("dlBar");
   const dialog = document.getElementById("dlDialog");
   const main = document.getElementById("dlMain");
   const skip = document.getElementById("dlSkip");
   const apkLink = document.getElementById("dlApk");
+  const hint = document.getElementById("dlHint");
   if (!bar || !dialog || !main || !apkLink || dialog.dataset.ready === "1") return;
   dialog.dataset.ready = "1";
   let p = 8;
@@ -4365,15 +4385,40 @@ function initDownloadPage() {
       setTimeout(done, 200);
     }
   }, 160);
-  let apk = "WebStudio.apk";
-  if (location.protocol !== "file:") {
-    apk = location.port === "3000" ? "/api/download/apk" : "/api/download/apk";
-    if (location.origin.indexOf("localhost") >= 0 && location.port !== "3000") apk = "WebStudio.apk";
-  }
+  const apk = resolveApkUrl();
   apkLink.href = apk;
-  if (location.protocol !== "file:") {
-    setTimeout(function () { location.href = apk; }, 2800);
-  }
+  apkLink.setAttribute("download", "WebStudio.apk");
+  apkLink.onclick = function (e) {
+    e.preventDefault();
+    startApkDownload(apk, apkLink, hint);
+  };
+  setTimeout(function () {
+    startApkDownload(apk, apkLink, hint);
+  }, 2800);
+}
+
+function startApkDownload(url, apkLink, hint) {
+  fetch(url)
+    .then(function (res) {
+      if (!res.ok) throw new Error(String(res.status));
+      return res.blob();
+    })
+    .then(function (blob) {
+      if (blob.size < 1000 || /text\/html/i.test(blob.type)) {
+        throw new Error("html");
+      }
+      const objectUrl = URL.createObjectURL(blob);
+      apkLink.href = objectUrl;
+      triggerApkDownload(objectUrl);
+    })
+    .catch(function () {
+      apkLink.href = url;
+      triggerApkDownload(url);
+      if (hint) {
+        hint.textContent =
+          "Không tải được vì GitHub không có API tạo APK. Hãy tải file WebStudio.apk lên cùng thư mục với index.html, rồi bấm lại nút Tải tệp cài đặt.";
+      }
+    });
 }
 
 window.addEventListener("hashchange", showPage);
